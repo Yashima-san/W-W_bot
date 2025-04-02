@@ -2,7 +2,6 @@ import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
 import pandas as pd
-import io
 import os
 
 # Токен вашего бота
@@ -12,44 +11,21 @@ TELEGRAM_BOT_TOKEN = '7825742740:AAF8yrh-fB_kvZFfoB3075RbDwOpkq4mjx4'
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Функция для преобразования XLSX в CSV и сохранения его в той же директории
-def convert_xlsx_to_csv(xlsx_path, csv_path):
-    if os.path.exists(csv_path):
-        logger.info("Такой файл уже есть!")
-        return
+# Путь к XLSX файлу
+xlsx_path = 'Rice11.xlsx'  # Путь к вашему XLSX файлу в локальной директории
 
+# Функция для получения списка групп из XLSX файла
+def get_groups_from_xlsx(xlsx_path):
     try:
-        # Считываем файл XLSX
         df = pd.read_excel(xlsx_path)
+        groups = df.columns[2:].tolist()  # Предполагаем, что первые две колонки - День недели и Время
+        return groups
     except Exception as e:
         logger.error(f"Ошибка при чтении файла {xlsx_path}: {e}")
-        raise Exception(f"Ошибка при чтении файла {xlsx_path}: {e}")
+        return []
 
-    csv_buffer = io.StringIO()
-    df.to_csv(csv_buffer, index=False)
-    csv_buffer.seek(0)
-
-    try:
-        # Сохраняем файл CSV
-        with open(csv_path, 'w', encoding='utf-8') as csv_file:
-            csv_file.write(csv_buffer.getvalue())
-    except Exception as e:
-        logger.error(f"Ошибка при записи файла {csv_path}: {e}")
-        raise Exception(f"Ошибка при записи файла {csv_path}: {e}")
-
-# Преобразование и сохранение файла Rice11.xlsx в Rice11.csv в той же директории
-try:
-    xlsx_path = 'Rice11.xlsx'  # Путь к вашему XLSX файлу в локальной директории
-    csv_path = 'Rice11.csv'     # Путь к вашему CSV файлу в локальной директории
-
-    # Логирование текущей рабочей директории
-    current_directory = os.getcwd()
-    logger.info(f"Текущая рабочая директория: {current_directory}")
-
-    convert_xlsx_to_csv(xlsx_path, csv_path)
-    logger.info("Файл Rice11.xlsx успешно преобразован и сохранён как Rice11.csv")
-except Exception as e:
-    logger.error(f"Ошибка при преобразовании и сохранении файла: {e}")
+# Получаем список групп
+groups = get_groups_from_xlsx(xlsx_path)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     keyboard = [
@@ -69,8 +45,8 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await query.edit_message_text(text="На стадии разработки!")
     elif query.data == '1':
         keyboard = [
-            [InlineKeyboardButton("ИС24-02", callback_data='ИС24-02')],
-            # Добавьте остальные группы здесь
+            [InlineKeyboardButton(group, callback_data=group)] for group in groups[:13]  # Сокращаем до ИС24-01-1П включительно
+        ] + [
             [InlineKeyboardButton("<-- Назад", callback_data='back_to_start')]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -101,25 +77,38 @@ async def schedule_button(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     group = data[0]
     day = data[1]
 
-    # Путь к CSV файлу
-    csv_path = 'Rice11.csv'  # Путь к вашему CSV файлу в локальной директории
+    # Проверка наличия файла XLSX
+    if not os.path.exists(xlsx_path):
+        await query.edit_message_text(text="Файл Rice11.xlsx не найден. Попробуйте позже.")
+        return
 
     try:
-        df = pd.read_csv(csv_path)
+        # Считываем файл XLSX
+        df = pd.read_excel(xlsx_path)
     except Exception as e:
         await query.edit_message_text(text=f"Ошибка при чтении файла: {e}")
         return
 
     if day == 'Full':
-        filtered_df = df[df['Группа'] == group][['День недели', 'Время', group]]
+        # Формируем полное расписание
+        full_schedule = f"————————————————————————\nГруппа: {group}\nПолное расписание\n————————————————————————\n"
+        days_of_week = df['День недели'].unique()
+        for d in days_of_week:
+            day_schedule = df[(df['День недели'] == d) & (df[group].notna())][['Время', group]]
+            if not day_schedule.empty:
+                full_schedule += f"\n————————————————————————\n{d}\n————————————————————————\n"
+                for _, row in day_schedule.iterrows():
+                    full_schedule += f"⏰ {row['Время']} ┆ {row[group]}\n"
+        schedule = full_schedule
     else:
-        filtered_df = df[(df['Группа'] == group) & (df['День недели'] == day)][['День недели', 'Время', group]]
-
-    # Формируем текст для вывода
-    if filtered_df.empty:
-        schedule = "Расписание на выбранный день недели отсутствует."
-    else:
-        schedule = filtered_df.to_string(index=False)
+        # Формируем расписание для конкретного дня
+        filtered_df = df[(df['День недели'] == day) & (df[group].notna())][['Время', group]]
+        if filtered_df.empty:
+            schedule = "Расписание на выбранный день недели отсутствует."
+        else:
+            schedule = f"Группа: {group}\nДень: {day}\n——————————————————\n"
+            for _, row in filtered_df.iterrows():
+                schedule += f"⏰ {row['Время']} ┆ {row[group]}\n"
 
     keyboard = [
         [InlineKeyboardButton("<-- Назад", callback_data=f'{group}_back_to_days')]
@@ -144,8 +133,8 @@ async def back_to_groups(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     await query.answer()
 
     keyboard = [
-        [InlineKeyboardButton("ИС24-02", callback_data='ИС24-02')],
-        # Добавьте остальные группы здесь
+        [InlineKeyboardButton(group, callback_data=group)] for group in groups[:13]  # Сокращаем до ИС24-01-1П включительно
+    ] + [
         [InlineKeyboardButton("<-- Назад", callback_data='back_to_start')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -165,7 +154,7 @@ async def back_to_days(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         [InlineKeyboardButton("Четверг", callback_data=f'{group}_Thursday')],
         [InlineKeyboardButton("Пятница", callback_data=f'{group}_Friday')],
         [InlineKeyboardButton("Полное расписание", callback_data=f'{group}_Full')],
-        [InlineKeyboardButton("Назад", callback_data=f'{group}_back_to_groups')]
+        [InlineKeyboardButton("<-- Назад", callback_data=f'{group}_back_to_groups')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await query.edit_message_text(text='Выберите день недели:', reply_markup=reply_markup)
@@ -175,11 +164,11 @@ def main() -> None:
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CallbackQueryHandler(button, pattern='^[123]$'))
-    application.add_handler(CallbackQueryHandler(group_button, pattern='^ИС24-02$'))  # Добавьте остальные группы здесь
-    application.add_handler(CallbackQueryHandler(schedule_button, pattern='^(ИС24-02)_[A-Za-z]+$'))  # Добавьте остальные группы здесь
+    application.add_handler(CallbackQueryHandler(group_button, pattern='^(' + '|'.join(groups[:13]) + ')$'))  # Сокращаем до ИС24-01-1П включительно
+    application.add_handler(CallbackQueryHandler(schedule_button, pattern='^(' + '|'.join(groups[:13]) + ')_[A-Za-z]+$'))  # Сокращаем до ИС24-01-1П включительно
     application.add_handler(CallbackQueryHandler(back_to_start, pattern='^back_to_start$'))
-    application.add_handler(CallbackQueryHandler(back_to_groups, pattern='^(ИС24-02)_back_to_groups$'))  # Добавьте остальные группы здесь
-    application.add_handler(CallbackQueryHandler(back_to_days, pattern='^(ИС24-02)_back_to_days$'))  # Добавьте остальные группы здесь
+    application.add_handler(CallbackQueryHandler(back_to_groups, pattern='^(' + '|'.join(groups[:13]) + ')_back_to_groups$'))  # Сокращаем до ИС24-01-1П включительно
+    application.add_handler(CallbackQueryHandler(back_to_days, pattern='^(' + '|'.join(groups[:13]) + ')_back_to_days$'))  # Сокращаем до ИС24-01-1П включительно
 
     application.run_polling()
 

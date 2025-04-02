@@ -87,8 +87,8 @@ async def schedule_button(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     if day == 'Full':
         # Формируем полное расписание
-        full_schedule = f"————————————————————————\nГруппа: {group}\nПолное расписание\n————————————————————————\n"
-        days_of_week = df['День недели'].unique()
+        full_schedule = f"Группа: {group}\nПолное расписание"
+        days_of_week = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница']
         for d in days_of_week:
             day_schedule = df[(df['День недели'] == d) & (df[group].notna())][['Время', group]]
             if not day_schedule.empty:
@@ -100,7 +100,7 @@ async def schedule_button(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         # Формируем расписание для конкретного дня
         filtered_df = df[(df['День недели'] == day) & (df[group].notna())][['Время', group]]
         if filtered_df.empty:
-            schedule = "Расписание на выбранный день недели отсутствует."
+            schedule = f"Группа: {group}\nДень: {day}\n————————————————————————\nРасписание на выбранный день недели отсутствует."
         else:
             schedule = f"Группа: {group}\nДень: {day}\n————————————————————————\n"
             for _, row in filtered_df.iterrows():
@@ -159,7 +159,7 @@ def main() -> None:
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CallbackQueryHandler(button, pattern='^[123]$'))
     application.add_handler(CallbackQueryHandler(group_button, pattern='^(' + '|'.join(groups[:13]) + ')$'))  # Сокращаем до ИС24-01-1П включительно
-    application.add_handler(CallbackQueryHandler(schedule_button, pattern='^(' + '|'.join(groups[:13]) + ')_[А-Яа-я]+$'))  # Сокращаем до ИС24-01-1П включительно
+    application.add_handler(CallbackQueryHandler(schedule_button, pattern='^(' + '|'.join(groups[:13]) + ')_(Понедельник|Вторник|Среда|Четверг|Пятница|Full)$'))  # Сокращаем до ИС24-01-1П включительно
     application.add_handler(CallbackQueryHandler(back_to_start, pattern='^back_to_start$'))
     application.add_handler(CallbackQueryHandler(back_to_groups, pattern='^(' + '|'.join(groups[:13]) + ')_back_to_groups$'))  # Сокращаем до ИС24-01-1П включительно
     application.add_handler(CallbackQueryHandler(back_to_days, pattern='^(' + '|'.join(groups[:13]) + ')_back_to_days$'))  # Сокращаем до ИС24-01-1П включительно

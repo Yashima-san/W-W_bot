@@ -106,7 +106,7 @@ async def schedule_button(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         if filtered_df.empty:
             schedule = "Расписание на выбранный день недели отсутствует."
         else:
-            schedule = f"Группа: {group}\nДень: {day}\n——————————————————\n"
+            schedule = f"————————————————————————\nГруппа: {group}\nДень: {day}\n————————————————————————\n"
             for _, row in filtered_df.iterrows():
                 schedule += f"⏰ {row['Время']} ┆ {row[group]}\n"
 

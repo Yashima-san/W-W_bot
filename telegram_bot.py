@@ -58,11 +58,7 @@ async def group_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
     group = query.data
     keyboard = [
-        [InlineKeyboardButton("Понедельник", callback_data=f'{group}_Monday')],
-        [InlineKeyboardButton("Вторник", callback_data=f'{group}_Tuesday')],
-        [InlineKeyboardButton("Среда", callback_data=f'{group}_Wednesday')],
-        [InlineKeyboardButton("Четверг", callback_data=f'{group}_Thursday')],
-        [InlineKeyboardButton("Пятница", callback_data=f'{group}_Friday')],
+        [InlineKeyboardButton(day, callback_data=f'{group}_{day}') for day in ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница']],
         [InlineKeyboardButton("Полное расписание", callback_data=f'{group}_Full')],
         [InlineKeyboardButton("<-- Назад", callback_data=f'{group}_back_to_groups')]
     ]
@@ -106,9 +102,11 @@ async def schedule_button(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         if filtered_df.empty:
             schedule = "Расписание на выбранный день недели отсутствует."
         else:
-            schedule = f"————————————————————————\nГруппа: {group}\nДень: {day}\n————————————————————————\n"
+            schedule = f"Группа: {group}\nДень: {day}\n————————————————————————\n"
             for _, row in filtered_df.iterrows():
                 schedule += f"⏰ {row['Время']} ┆ {row[group]}\n"
+
+    logger.info(f"Расписание для группы {group} на {day}:\n{schedule}")
 
     keyboard = [
         [InlineKeyboardButton("<-- Назад", callback_data=f'{group}_back_to_days')]
@@ -148,11 +146,7 @@ async def back_to_days(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     group = data[0]
 
     keyboard = [
-        [InlineKeyboardButton("Понедельник", callback_data=f'{group}_Monday')],
-        [InlineKeyboardButton("Вторник", callback_data=f'{group}_Tuesday')],
-        [InlineKeyboardButton("Среда", callback_data=f'{group}_Wednesday')],
-        [InlineKeyboardButton("Четверг", callback_data=f'{group}_Thursday')],
-        [InlineKeyboardButton("Пятница", callback_data=f'{group}_Friday')],
+        [InlineKeyboardButton(day, callback_data=f'{group}_{day}') for day in ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница']],
         [InlineKeyboardButton("Полное расписание", callback_data=f'{group}_Full')],
         [InlineKeyboardButton("<-- Назад", callback_data=f'{group}_back_to_groups')]
     ]
@@ -165,7 +159,7 @@ def main() -> None:
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CallbackQueryHandler(button, pattern='^[123]$'))
     application.add_handler(CallbackQueryHandler(group_button, pattern='^(' + '|'.join(groups[:13]) + ')$'))  # Сокращаем до ИС24-01-1П включительно
-    application.add_handler(CallbackQueryHandler(schedule_button, pattern='^(' + '|'.join(groups[:13]) + ')_[A-Za-z]+$'))  # Сокращаем до ИС24-01-1П включительно
+    application.add_handler(CallbackQueryHandler(schedule_button, pattern='^(' + '|'.join(groups[:13]) + ')_[А-Яа-я]+$'))  # Сокращаем до ИС24-01-1П включительно
     application.add_handler(CallbackQueryHandler(back_to_start, pattern='^back_to_start$'))
     application.add_handler(CallbackQueryHandler(back_to_groups, pattern='^(' + '|'.join(groups[:13]) + ')_back_to_groups$'))  # Сокращаем до ИС24-01-1П включительно
     application.add_handler(CallbackQueryHandler(back_to_days, pattern='^(' + '|'.join(groups[:13]) + ')_back_to_days$'))  # Сокращаем до ИС24-01-1П включительно
